@@ -1,0 +1,8 @@
+{
+  "title": "رواية تجريبية",
+  "chapters": [
+    { "id": "1", "title": "الفصل الأول: البداية", "file": "chapters/1.txt" },
+    { "id": "2", "title": "الفصل الثاني: الطريق", "file": "chapters/2.txt" },
+    { "id": "3", "title": "الفصل الثالث: الوصول", "file": "chapters/3.txt" }
+  ]
+}
