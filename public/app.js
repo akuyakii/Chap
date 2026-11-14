@@ -156,6 +156,14 @@ const bookmarkletFn = async () => {
       const hit = Object.keys(mp).filter(k => /read|progress|continue|bookmark/i.test(k));
       info = '\nPAGE KEYS: ' + hit.map(k => k + '=' + JSON.stringify(mp[k]).slice(0, 160)).join(' ; ');
     } catch (e) { info = '\nPAGE CHECK FAILED: ' + e.message; }
+    try {
+      const id = d.progress[0].mangaId, cid = d.progress[0].chapterId;
+      const cj = await (await fetch('/api/manga/allChapters?mangaId=' + id, { credentials: 'include' })).json();
+      const list = cj.chapters || cj;
+      const mine = list.find(c => c.id === cid) || list[0];
+      info += '\nCHAPTER KEYS: ' + Object.keys(mine).join(',') + '\nTOP-LEVEL: ' + Object.keys(cj).join(',');
+      info += '\nMY CH: ' + JSON.stringify(mine).slice(0, 220);
+    } catch (e) { info += '\nCHAPTERS CHECK FAILED: ' + e.message; }
     alert('Bookmarks: ' + d.bookmarks.length + ' [' + bs.map(x => x.s).join(',') + '] ' + (bs[0] ? bs[0].t : '') +
       '\nProgress: ' + d.progress.length + ' [' + ps.map(x => x.s).join(',') + '] ' + (ps[0] ? ps[0].t : '') + info);
   } catch (e) { alert('Sync error: ' + e.message); }
