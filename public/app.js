@@ -10,7 +10,8 @@ const state = {
     index: 0,          // index in chapters array
     page: 0,
     images: [],
-    mode: localStorage.getItem('readerMode') || 'scroll',  // 'scroll' | 'page'
+    mode: localStorage.getItem('readerMode') || 'scroll',
+    busy: false, loaded: 0, auto: true,  // 'scroll' | 'page'
   },
 };
 
@@ -89,6 +90,17 @@ async function resumeLast() {
     showSpinner(false);
   }
 }
+
+state.reader.auto = store.get('autoNext', true);
+function nextChapter() {
+  const r = state.reader;
+  if (r.busy) return false;
+  const idx = r.index - 1;            // list is newest-first, so -1 = next chapter
+  if (idx < 0) return false;
+  openReader(r.mangaId, state.chapters[idx].id, idx);
+  return true;
+}
+function paintAuto() { $('autoBtn').textContent = state.reader.auto ? 'Auto ✓' : 'Auto ✗'; }
 
 function showSpinner(v) { spinner.classList.toggle('hidden', !v); }
 
@@ -282,6 +294,7 @@ async function openReader(mangaId, chapterId, chapterIndex) {
   showSpinner(true);
   readerPages.innerHTML = '';
 
+  state.reader.busy = true; state.reader.loaded = 0;
   markRead(mangaId, chapterId);
   if (state.manga && state.chapters[chapterIndex]) saveHist(state.manga, state.chapters[chapterIndex]);
   state.reader.mangaId    = mangaId;
@@ -310,7 +323,8 @@ async function openReader(mangaId, chapterId, chapterIndex) {
       img.loading = 'lazy';
       img.alt = `Page ${i + 1}`;
       img.src = proxyImg(url);
-      img.onerror = () => { img.style.opacity = '.3'; };
+      img.onload = () => { state.reader.loaded++; };
+      img.onerror = () => { state.reader.loaded++; img.style.opacity = '.3'; };
       readerPages.appendChild(img);
     });
 
@@ -320,6 +334,7 @@ async function openReader(mangaId, chapterId, chapterIndex) {
   } catch (e) {
     readerPages.innerHTML = `<p style="color:#f66;padding:24px">Error: ${e.message}</p>`;
   } finally {
+    state.reader.busy = false;
     showSpinner(false);
     window.scrollTo(0, 0);
   }
@@ -341,7 +356,7 @@ function goToPage(n) {
   imgs.forEach((img, i) => img.classList.toggle('hidden', i !== n));
   pageCounter.textContent = `${n + 1} / ${imgs.length}`;
   $('prevPageBtn').disabled = n === 0;
-  $('nextPageBtn').disabled = n === imgs.length - 1;
+  $('nextPageBtn').disabled = n === imgs.length - 1 && !state.reader.auto;
   window.scrollTo(0, 0);
 }
 
@@ -412,7 +427,11 @@ $('modeBtn').addEventListener('click', () => {
 
 // Page nav
 $('prevPageBtn').addEventListener('click', () => goToPage(state.reader.page - 1));
-$('nextPageBtn').addEventListener('click', () => goToPage(state.reader.page + 1));
+$('nextPageBtn').addEventListener('click', () => {
+  const total = readerPages.querySelectorAll('img').length;
+  if (state.reader.page >= total - 1) { if (state.reader.auto) nextChapter(); }
+  else goToPage(state.reader.page + 1);
+});
 
 // Keyboard
 document.addEventListener('keydown', e => {
@@ -443,3 +462,18 @@ $('favBtn').addEventListener('click',  () => setListMode('favs'));
 $('histBtn').addEventListener('click', () => setListMode('hist'));
 $('resumeBtn').addEventListener('click', resumeLast);
 paintResume();
+
+$('autoBtn').addEventListener('click', () => {
+  state.reader.auto = !state.reader.auto;
+  store.set('autoNext', state.reader.auto);
+  paintAuto();
+});
+paintAuto();
+new IntersectionObserver(entries => {
+  const r = state.reader;
+  if (!entries[0].isIntersecting || !r.auto || r.mode !== 'scroll') return;
+  if (document.body.dataset.view !== 'reader' || r.busy) return;
+  // only after every page has loaded and the user actually scrolled
+  if (!r.images.length || r.loaded < r.images.length || window.scrollY < 50) return;
+  nextChapter();
+}, { rootMargin: '0px 0px 200px 0px' }).observe($('readerEnd'));
