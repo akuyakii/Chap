@@ -32,3 +32,20 @@ Chap/
     ├── style.css
     └── app.js
 ```
+
+## التشغيل على Termux (أندرويد)
+
+```bash
+pkg update -y && pkg upgrade -y
+pkg install -y nodejs git
+git clone https://github.com/akuyakii/Chap
+cd Chap
+git checkout ccr-c3019501-oykvh7
+npm install
+npm start
+```
+ثم افتح المتصفح على الموبايل: `http://localhost:3000`
+
+- يعرض المانجا الرومانسية فقط (Genre 9). لتغيير التصنيف: `GENRE_ID=39 npm start`
+- لإيقاف السيرفر: `Ctrl+C`
+- لتحديث المشروع لاحقًا: `cd Chap && git pull && npm install`

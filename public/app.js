@@ -83,6 +83,11 @@ async function init() {
       sortSelect.insertAdjacentHTML('beforeend', `<option value="${s.value}">${s.label}</option>`);
     });
     state.browse.sort = state.sorts[0].value;
+    // Single locked genre: hide the genre/tag pickers
+    if (state.genres.length === 1) {
+      genreSelect.closest('section').classList.add('hidden');
+      tagSelect.closest('section').classList.add('hidden');
+    }
 
     await loadBrowse();
   } catch (e) {

@@ -5,6 +5,8 @@ const app = express();
 const BASE = 'https://atsu.moe';
 const CDN  = 'https://cdn.atsu.moe';
 const PORT = 3000;
+// Locked to Romance only (genre id 9). Override with GENRE_ID=... npm start
+const LOCKED_GENRE = process.env.GENRE_ID || '9';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -75,14 +77,15 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ─── API: Genres/Tags ────────────────────────────────────────────────────────
 
 app.get('/api/meta', (_req, res) => {
-  res.json({ genres: GENRES, tags: TAGS, sorts: SORTS });
+  res.json({ genres: GENRES.filter(g => String(g.id) === LOCKED_GENRE), tags: [], sorts: SORTS, locked: true });
 });
 
 // ─── API: Browse (Typesense search) ──────────────────────────────────────────
 
 app.get('/api/browse', async (req, res) => {
   try {
-    const { genreId, tagId, sort = 'views:desc', page = 1, q = '*' } = req.query;
+    const { sort = 'views:desc', page = 1, q = '*' } = req.query;
+    const genreId = LOCKED_GENRE, tagId = '';
 
     const filters = [
       `hidden:!=true`,
