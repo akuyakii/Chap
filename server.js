@@ -30,7 +30,11 @@ async function atsuFetch(urlPath, params = {}) {
 }
 
 function cdnUrl(imgPath) {
-  if (!imgPath) return '';
+  // The API sometimes returns an object ({ image: '...' }) instead of a string
+  if (imgPath && typeof imgPath === 'object') {
+    imgPath = imgPath.image || imgPath.path || imgPath.url || imgPath.src || '';
+  }
+  if (typeof imgPath !== 'string' || !imgPath) return '';
   if (imgPath.startsWith('http')) return imgPath;
   const p = imgPath.startsWith('/') ? imgPath : '/' + imgPath;
   if (!p.startsWith('/static/')) return CDN + '/static' + p;
