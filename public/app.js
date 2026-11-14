@@ -92,6 +92,21 @@ async function resumeLast() {
 }
 
 state.reader.auto = store.get('autoNext', true);
+function completeChapter() {
+  const r = state.reader;
+  if (r.done || !r.mangaId) return;
+  r.done = true;
+  markRead(r.mangaId, r.chapterId);
+}
+function checkEnd() {
+  const r = state.reader;
+  if (document.body.dataset.view !== 'reader' || r.busy || r.mode !== 'scroll') return;
+  // every page loaded and the user actually scrolled to the bottom
+  if (!r.images.length || r.loaded < r.images.length || window.scrollY < 50) return;
+  if ($('readerEnd').getBoundingClientRect().top > window.innerHeight + 200) return;
+  completeChapter();
+  if (r.auto) nextChapter();
+}
 function nextChapter() {
   const r = state.reader;
   if (r.busy) return false;
@@ -162,7 +177,11 @@ const bookmarkletFn = async () => {
       const list = cj.chapters || cj;
       const mine = list.find(c => c.id === cid) || list[0];
       info += '\nCHAPTER KEYS: ' + Object.keys(mine).join(',') + '\nTOP-LEVEL: ' + Object.keys(cj).join(',');
-      info += '\nMY CH: ' + JSON.stringify(mine).slice(0, 220);
+      const withP = list.filter(c => c.progress).slice(0, 4).map(c => {
+        const p = Object.assign({}, c.progress); delete p.mangaScanlationId; delete p.mangaId;
+        return 'ch' + c.number + ' ' + JSON.stringify(p);
+      });
+      info += '\nPROGRESS: ' + (withP.join(' ; ') || 'none');
     } catch (e) { info += '\nCHAPTERS CHECK FAILED: ' + e.message; }
     alert('Bookmarks: ' + d.bookmarks.length + ' [' + bs.map(x => x.s).join(',') + '] ' + (bs[0] ? bs[0].t : '') +
       '\nProgress: ' + d.progress.length + ' [' + ps.map(x => x.s).join(',') + '] ' + (ps[0] ? ps[0].t : '') + info);
@@ -364,7 +383,7 @@ async function openReader(mangaId, chapterId, chapterIndex) {
 
   state.reader.busy = true; state.reader.loaded = 0;
   store.set('chaps:' + mangaId, state.chapters.map(c => ({ id: c.id, number: c.number, scanId: c.scanId, pageCount: c.pageCount || 0 })));
-  markRead(mangaId, chapterId);
+  state.reader.done = false;
   if (state.manga && state.chapters[chapterIndex]) saveHist(state.manga, state.chapters[chapterIndex]);
   state.reader.mangaId    = mangaId;
   state.reader.chapterId  = chapterId;
@@ -393,8 +412,8 @@ async function openReader(mangaId, chapterId, chapterIndex) {
       img.loading = 'lazy';
       img.alt = `Page ${i + 1}`;
       img.src = proxyImg(url);
-      img.onload = () => { state.reader.loaded++; };
-      img.onerror = () => { state.reader.loaded++; img.style.opacity = '.3'; };
+      img.onload = () => { state.reader.loaded++; checkEnd(); };
+      img.onerror = () => { state.reader.loaded++; img.style.opacity = '.3'; checkEnd(); };
       readerPages.appendChild(img);
     });
 
@@ -425,6 +444,7 @@ function goToPage(n) {
   state.reader.page = n;
   imgs.forEach((img, i) => img.classList.toggle('hidden', i !== n));
   pageCounter.textContent = `${n + 1} / ${imgs.length}`;
+  if (n === imgs.length - 1) completeChapter();
   $('prevPageBtn').disabled = n === 0;
   $('nextPageBtn').disabled = n === imgs.length - 1 && !state.reader.auto;
   window.scrollTo(0, 0);
@@ -539,14 +559,7 @@ $('autoBtn').addEventListener('click', () => {
   paintAuto();
 });
 paintAuto();
-new IntersectionObserver(entries => {
-  const r = state.reader;
-  if (!entries[0].isIntersecting || !r.auto || r.mode !== 'scroll') return;
-  if (document.body.dataset.view !== 'reader' || r.busy) return;
-  // only after every page has loaded and the user actually scrolled
-  if (!r.images.length || r.loaded < r.images.length || window.scrollY < 50) return;
-  nextChapter();
-}, { rootMargin: '0px 0px 200px 0px' }).observe($('readerEnd'));
+new IntersectionObserver(entries => { if (entries[0].isIntersecting) checkEnd(); }, { rootMargin: '0px 0px 200px 0px' }).observe($('readerEnd'));
 
 $('syncBtn').addEventListener('click', () => {
   const e = buildExport();
