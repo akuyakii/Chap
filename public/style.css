@@ -187,3 +187,12 @@ h1,h2,h3 { margin: 0; }
   #detailHeader { flex-direction: column; }
   #detailPoster { width: 120px; }
 }
+
+/* ── Read marks / actions ───────────────────────────── */
+#detailActions { display: flex; flex-wrap: wrap; gap: 8px; }
+#detailActions button {
+  padding: 7px 14px; border-radius: 8px; font-size: .85rem;
+  background: var(--accent2); color: #fff; border: 1px solid var(--accent2);
+}
+#detailActions button:first-child { background: var(--bg3); color: var(--fg); border-color: var(--border); }
+#chapterList li.read a { opacity: .5; }

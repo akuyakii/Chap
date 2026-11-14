@@ -1,7 +1,7 @@
 /* ── State ──────────────────────────────────────────── */
 const state = {
   genres: [], tags: [], sorts: [],
-  browse: { genreId: '', tagId: '', sort: '', q: '', type: '', page: 1, total: 0 },
+  browse: { favs: false, genreId: '', tagId: '', sort: '', q: '', type: '', page: 1, total: 0 },
   manga: null,         // current manga detail
   chapters: [],        // current manga chapters
   reader: {            // current reader session
@@ -42,6 +42,23 @@ async function api(path) {
 
 function proxyImg(url) {
   return '/api/image?url=' + encodeURIComponent(url);
+}
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+const readSet  = id => new Set(store.get('read:' + id, []));
+function markRead(mangaId, chapterId) {
+  const s = readSet(mangaId); s.add(chapterId);
+  store.set('read:' + mangaId, [...s]);
+}
+const getFavs = () => store.get('favs', {});
+function toggleFav(m) {
+  const f = getFavs();
+  if (f[m.id]) delete f[m.id]; else f[m.id] = { id: m.id, title: m.title, poster: m.poster };
+  store.set('favs', f);
+  return !!f[m.id];
 }
 
 function showSpinner(v) { spinner.classList.toggle('hidden', !v); }
@@ -100,8 +117,16 @@ async function init() {
 /* ── Browse ─────────────────────────────────────────── */
 async function loadBrowse(resetPage = false) {
   if (resetPage) state.browse.page = 1;
-  showSpinner(true);
   grid.innerHTML = '';
+  if (state.browse.favs) {
+    pagination.classList.add('hidden');
+    const list = Object.values(getFavs());
+    if (!list.length) grid.innerHTML = '<p style="padding:16px;color:var(--muted)">No favorites yet.</p>';
+    list.forEach(m => grid.insertAdjacentHTML('beforeend', mangaCard(m)));
+    grid.querySelectorAll('.manga-card').forEach(c => c.addEventListener('click', () => loadDetail(c.dataset.id)));
+    return;
+  }
+  showSpinner(true);
   try {
     const b = state.browse;
     let url = `/api/browse?page=${b.page}&sort=${encodeURIComponent(b.sort)}`;
@@ -179,13 +204,31 @@ async function loadDetail(mangaId) {
     ].filter(Boolean).join('');
     $('detailBadges').innerHTML = badges;
 
+    const done = readSet(mangaId);
+    const actions = $('detailActions');
+    actions.innerHTML = '';
+    const favBtn = document.createElement('button');
+    const paintFav = on => { favBtn.textContent = on ? '★ In favorites' : '☆ Add to favorites'; };
+    paintFav(!!getFavs()[m.id]);
+    favBtn.onclick = () => paintFav(toggleFav(m));
+    actions.appendChild(favBtn);
+    // Continue = oldest chapter not yet read (list is newest-first)
+    const next = [...m.chapters].reverse().find(c => !done.has(c.id)) || m.chapters[0];
+    if (next) {
+      const cont = document.createElement('button');
+      cont.textContent = done.size ? `▶ Continue (Ch. ${next.number})` : `▶ Start (Ch. ${next.number})`;
+      cont.onclick = () => openReader(mangaId, next.id, m.chapters.indexOf(next));
+      actions.appendChild(cont);
+    }
+
     $('chapterHeading').textContent = `Chapters (${m.chapters.length})`;
 
     m.chapters.forEach((ch, idx) => {
       const li = document.createElement('li');
       const chTitle = ch.title && ch.title !== `Chapter ${ch.number}` ? ch.title : '';
+      if (done.has(ch.id)) li.classList.add('read');
       li.innerHTML = `<a href="#" data-idx="${idx}">
-        <span class="ch-num">Ch. ${ch.number}</span>
+        <span class="ch-num">${done.has(ch.id) ? '✓ ' : ''}Ch. ${ch.number}</span>
         <span class="ch-title">${chTitle}</span>
         <span class="ch-date">${formatDate(ch.createdAt)}</span>
       </a>`;
@@ -208,6 +251,7 @@ async function openReader(mangaId, chapterId, chapterIndex) {
   showSpinner(true);
   readerPages.innerHTML = '';
 
+  markRead(mangaId, chapterId);
   state.reader.mangaId    = mangaId;
   state.reader.chapterId  = chapterId;
   state.reader.index      = chapterIndex;
@@ -353,3 +397,9 @@ document.addEventListener('keydown', e => {
 
 /* ── Bootstrap ──────────────────────────────────────── */
 init();
+
+$('favBtn').addEventListener('click', () => {
+  state.browse.favs = !state.browse.favs;
+  $('favBtn').classList.toggle('active', state.browse.favs);
+  loadBrowse(true);
+});
