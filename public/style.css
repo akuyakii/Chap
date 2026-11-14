@@ -182,7 +182,13 @@ h1,h2,h3 { margin: 0; }
 
 /* ── Responsive ─────────────────────────────────────── */
 @media (max-width: 600px) {
-  #sidebar { display: none; }
+  #browseView { flex-direction: column; }
+  #sidebar {
+    width: 100%; min-width: 0; height: auto; position: static;
+    flex-direction: row; flex-wrap: wrap; gap: 10px;
+    border-right: none; border-bottom: 1px solid var(--border);
+  }
+  #sidebar section { flex: 1 1 140px; }
   .manga-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
   #detailHeader { flex-direction: column; }
   #detailPoster { width: 120px; }
@@ -196,3 +202,10 @@ h1,h2,h3 { margin: 0; }
 }
 #detailActions button:first-child { background: var(--bg3); color: var(--fg); border-color: var(--border); }
 #chapterList li.read a { opacity: .5; }
+
+.resume-btn {
+  width: 100%; padding: 9px 10px; border-radius: 8px; font-size: .82rem; text-align: left;
+  background: var(--accent2); color: #fff; border: 1px solid var(--accent2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.resume-btn:disabled { opacity: .45; cursor: default; }

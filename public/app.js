@@ -1,7 +1,7 @@
 /* ── State ──────────────────────────────────────────── */
 const state = {
   genres: [], tags: [], sorts: [],
-  browse: { favs: false, genreId: '', tagId: '', sort: '', q: '', type: '', page: 1, total: 0 },
+  browse: { favs: false, hist: false, genreId: '', tagId: '', sort: '', q: '', type: '', page: 1, total: 0 },
   manga: null,         // current manga detail
   chapters: [],        // current manga chapters
   reader: {            // current reader session
@@ -61,6 +61,35 @@ function toggleFav(m) {
   return !!f[m.id];
 }
 
+const getHist = () => store.get('history', {});
+function saveHist(m, ch) {
+  const h = getHist();
+  h[m.id] = { id: m.id, title: m.title, poster: m.poster, chapterId: ch.id, number: ch.number, ts: Date.now() };
+  store.set('history', h);
+  paintResume();
+}
+const lastHist = () => Object.values(getHist()).sort((x, y) => y.ts - x.ts)[0];
+function paintResume() {
+  const l = lastHist(), b = $('resumeBtn');
+  b.disabled = !l;
+  b.textContent = l ? `▶ Continue: ${l.title} · Ch. ${l.number}` : '▶ Continue (nothing yet)';
+}
+async function resumeLast() {
+  const l = lastHist();
+  if (!l) return;
+  showSpinner(true);
+  try {
+    const m = await api(`/api/manga/${l.id}`);
+    state.manga = m; state.chapters = m.chapters;
+    const idx = m.chapters.findIndex(c => c.id === l.chapterId);
+    const i = idx >= 0 ? idx : 0;
+    await openReader(l.id, m.chapters[i].id, i);
+  } catch (e) {
+    alert('Error: ' + e.message);
+    showSpinner(false);
+  }
+}
+
 function showSpinner(v) { spinner.classList.toggle('hidden', !v); }
 
 function setView(name) {
@@ -118,10 +147,12 @@ async function init() {
 async function loadBrowse(resetPage = false) {
   if (resetPage) state.browse.page = 1;
   grid.innerHTML = '';
-  if (state.browse.favs) {
+  if (state.browse.favs || state.browse.hist) {
     pagination.classList.add('hidden');
-    const list = Object.values(getFavs());
-    if (!list.length) grid.innerHTML = '<p style="padding:16px;color:var(--muted)">No favorites yet.</p>';
+    const list = state.browse.hist
+      ? Object.values(getHist()).sort((x, y) => y.ts - x.ts)
+      : Object.values(getFavs());
+    if (!list.length) grid.innerHTML = '<p style="padding:16px;color:var(--muted)">Nothing here yet.</p>';
     list.forEach(m => grid.insertAdjacentHTML('beforeend', mangaCard(m)));
     grid.querySelectorAll('.manga-card').forEach(c => c.addEventListener('click', () => loadDetail(c.dataset.id)));
     return;
@@ -252,6 +283,7 @@ async function openReader(mangaId, chapterId, chapterIndex) {
   readerPages.innerHTML = '';
 
   markRead(mangaId, chapterId);
+  if (state.manga && state.chapters[chapterIndex]) saveHist(state.manga, state.chapters[chapterIndex]);
   state.reader.mangaId    = mangaId;
   state.reader.chapterId  = chapterId;
   state.reader.index      = chapterIndex;
@@ -398,8 +430,16 @@ document.addEventListener('keydown', e => {
 /* ── Bootstrap ──────────────────────────────────────── */
 init();
 
-$('favBtn').addEventListener('click', () => {
-  state.browse.favs = !state.browse.favs;
-  $('favBtn').classList.toggle('active', state.browse.favs);
+function setListMode(mode) {
+  const b = state.browse;
+  b.favs = mode === 'favs' ? !b.favs : false;
+  b.hist = mode === 'hist' ? !b.hist : false;
+  $('favBtn').classList.toggle('active', b.favs);
+  $('histBtn').classList.toggle('active', b.hist);
+  setView('browse');
   loadBrowse(true);
-});
+}
+$('favBtn').addEventListener('click',  () => setListMode('favs'));
+$('histBtn').addEventListener('click', () => setListMode('hist'));
+$('resumeBtn').addEventListener('click', resumeLast);
+paintResume();
