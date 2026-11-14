@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chap Reader</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-view="browse">
+
+<!-- ══════════════════════ TOP BAR ══════════════════════ -->
+<header id="topbar">
+  <button id="backBtn" class="icon-btn hidden" title="Back">←</button>
+  <span id="topTitle">Chap Reader</span>
+  <form id="searchForm" autocomplete="off">
+    <input id="searchInput" type="search" placeholder="Search manga…" spellcheck="false">
+  </form>
+</header>
+
+<!-- ══════════════════════ BROWSE VIEW ══════════════════════ -->
+<div id="browseView" class="view active">
+  <aside id="sidebar">
+    <section>
+      <label>Genre</label>
+      <select id="genreSelect"><option value="">All Genres</option></select>
+    </section>
+    <section>
+      <label>Tag</label>
+      <select id="tagSelect"><option value="">All Tags</option></select>
+    </section>
+    <section>
+      <label>Sort</label>
+      <select id="sortSelect"></select>
+    </section>
+    <section>
+      <label>Type</label>
+      <div id="typeFilter" class="chip-group">
+        <button class="chip active" data-type="">All</button>
+        <button class="chip" data-type="Manga">Manga</button>
+        <button class="chip" data-type="Manwha">Manhwa</button>
+        <button class="chip" data-type="Manhua">Manhua</button>
+      </div>
+    </section>
+  </aside>
+
+  <main id="browseMain">
+    <div id="grid" class="manga-grid"></div>
+    <div id="pagination" class="pagination hidden">
+      <button id="prevPage" disabled>‹ Prev</button>
+      <span id="pageInfo"></span>
+      <button id="nextPage">Next ›</button>
+    </div>
+  </main>
+</div>
+
+<!-- ══════════════════════ DETAIL VIEW ══════════════════════ -->
+<div id="detailView" class="view">
+  <div id="detailContent">
+    <div id="detailHeader">
+      <img id="detailPoster" src="" alt="">
+      <div id="detailMeta">
+        <h1 id="detailTitle"></h1>
+        <p id="detailAlt" class="muted"></p>
+        <div id="detailBadges"></div>
+        <p id="detailSynopsis"></p>
+        <p id="detailAuthors" class="muted"></p>
+      </div>
+    </div>
+    <h2 id="chapterHeading">Chapters</h2>
+    <ul id="chapterList"></ul>
+  </div>
+</div>
+
+<!-- ══════════════════════ READER VIEW ══════════════════════ -->
+<div id="readerView" class="view">
+  <div id="readerBar">
+    <button id="readerBack" class="icon-btn">←</button>
+    <span id="readerTitle"></span>
+    <div class="reader-controls">
+      <button id="prevChapBtn" title="Previous Chapter">‹ Prev</button>
+      <span id="readerProgress"></span>
+      <button id="nextChapBtn" title="Next Chapter">Next ›</button>
+      <button id="modeBtn" title="Toggle mode">⇕</button>
+    </div>
+  </div>
+  <div id="readerPages"></div>
+  <div id="readerNav" class="hidden">
+    <button id="prevPageBtn">‹</button>
+    <span id="pageCounter"></span>
+    <button id="nextPageBtn">›</button>
+  </div>
+</div>
+
+<!-- Spinner -->
+<div id="spinner" class="spinner hidden"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,350 @@
+/* ── State ──────────────────────────────────────────── */
+const state = {
+  genres: [], tags: [], sorts: [],
+  browse: { genreId: '', tagId: '', sort: '', q: '', type: '', page: 1, total: 0 },
+  manga: null,         // current manga detail
+  chapters: [],        // current manga chapters
+  reader: {            // current reader session
+    mangaId: '',
+    chapterId: '',
+    index: 0,          // index in chapters array
+    page: 0,
+    images: [],
+    mode: localStorage.getItem('readerMode') || 'scroll',  // 'scroll' | 'page'
+  },
+};
+
+/* ── DOM refs ───────────────────────────────────────── */
+const $ = id => document.getElementById(id);
+const browseView  = $('browseView');
+const detailView  = $('detailView');
+const readerView  = $('readerView');
+const spinner     = $('spinner');
+const backBtn     = $('backBtn');
+const topTitle    = $('topTitle');
+const grid        = $('grid');
+const pagination  = $('pagination');
+const genreSelect = $('genreSelect');
+const tagSelect   = $('tagSelect');
+const sortSelect  = $('sortSelect');
+const typeFilter  = $('typeFilter');
+const searchInput = $('searchInput');
+const readerPages = $('readerPages');
+const readerNav   = $('readerNav');
+const pageCounter = $('pageCounter');
+
+/* ── Utilities ──────────────────────────────────────── */
+async function api(path) {
+  const res = await fetch(path);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+function proxyImg(url) {
+  return '/api/image?url=' + encodeURIComponent(url);
+}
+
+function showSpinner(v) { spinner.classList.toggle('hidden', !v); }
+
+function setView(name) {
+  browseView.classList.toggle('active', name === 'browse');
+  detailView.classList.toggle('active', name === 'detail');
+  readerView.classList.toggle('active', name === 'reader');
+  backBtn.classList.toggle('hidden', name === 'browse');
+  topTitle.textContent = name === 'browse' ? 'Chap Reader' : '';
+  document.body.dataset.view = name;
+  if (name !== 'reader') $('searchForm').classList.remove('hidden');
+  else $('searchForm').classList.add('hidden');
+}
+
+function formatDate(ts) {
+  if (!ts) return '';
+  const d = new Date(typeof ts === 'number' && ts < 1e12 ? ts * 1000 : ts);
+  return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+/* ── Init ───────────────────────────────────────────── */
+async function init() {
+  showSpinner(true);
+  try {
+    const meta = await api('/api/meta');
+    state.genres = meta.genres;
+    state.tags   = meta.tags;
+    state.sorts  = meta.sorts;
+
+    // Populate selects
+    state.genres.forEach(g => {
+      genreSelect.insertAdjacentHTML('beforeend', `<option value="${g.id}">${g.name}</option>`);
+    });
+    state.tags.forEach(t => {
+      tagSelect.insertAdjacentHTML('beforeend', `<option value="${t.id}">${t.name}</option>`);
+    });
+    state.sorts.forEach(s => {
+      sortSelect.insertAdjacentHTML('beforeend', `<option value="${s.value}">${s.label}</option>`);
+    });
+    state.browse.sort = state.sorts[0].value;
+
+    await loadBrowse();
+  } catch (e) {
+    grid.innerHTML = `<p style="color:#f66;padding:16px">Error: ${e.message}</p>`;
+  } finally {
+    showSpinner(false);
+  }
+}
+
+/* ── Browse ─────────────────────────────────────────── */
+async function loadBrowse(resetPage = false) {
+  if (resetPage) state.browse.page = 1;
+  showSpinner(true);
+  grid.innerHTML = '';
+  try {
+    const b = state.browse;
+    let url = `/api/browse?page=${b.page}&sort=${encodeURIComponent(b.sort)}`;
+    if (b.genreId) url += `&genreId=${b.genreId}`;
+    if (b.tagId)   url += `&tagId=${b.tagId}`;
+    if (b.q)       url += `&q=${encodeURIComponent(b.q)}`;
+
+    const data = await api(url);
+    state.browse.total = data.total;
+
+    // Type filter client-side
+    const hits = b.type ? data.hits.filter(h => h.type === b.type) : data.hits;
+
+    if (!hits.length) {
+      grid.innerHTML = '<p style="padding:16px;color:var(--muted)">No results found.</p>';
+    } else {
+      hits.forEach(m => grid.insertAdjacentHTML('beforeend', mangaCard(m)));
+      grid.querySelectorAll('.manga-card').forEach(card => {
+        card.addEventListener('click', () => loadDetail(card.dataset.id));
+      });
+    }
+
+    // Pagination
+    const totalPages = Math.ceil(data.total / 40);
+    if (totalPages > 1) {
+      pagination.classList.remove('hidden');
+      $('prevPage').disabled = b.page <= 1;
+      $('nextPage').disabled = b.page >= totalPages;
+      $('pageInfo').textContent = `Page ${b.page} / ${totalPages}`;
+    } else {
+      pagination.classList.add('hidden');
+    }
+  } catch (e) {
+    grid.innerHTML = `<p style="color:#f66;padding:16px">Error: ${e.message}</p>`;
+  } finally {
+    showSpinner(false);
+  }
+}
+
+function mangaCard(m) {
+  const img = m.poster ? proxyImg(m.poster) : '';
+  const type = m.type || '';
+  const ch = m.chapterCount ? `${m.chapterCount} ch` : '';
+  return `<div class="manga-card" data-id="${m.id}">
+    <img src="${img}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+    <div class="card-info">
+      <div class="card-title">${m.title || 'Unknown'}</div>
+      <div class="card-meta">${[type, ch].filter(Boolean).join(' · ')}</div>
+    </div>
+  </div>`;
+}
+
+/* ── Detail ─────────────────────────────────────────── */
+async function loadDetail(mangaId) {
+  setView('detail');
+  showSpinner(true);
+  $('chapterList').innerHTML = '';
+  try {
+    const m = await api(`/api/manga/${mangaId}`);
+    state.manga = m;
+    state.chapters = m.chapters;
+
+    topTitle.textContent = m.title;
+    $('detailPoster').src = m.poster ? proxyImg(m.poster) : '';
+    $('detailTitle').textContent = m.title;
+    $('detailAlt').textContent = m.altTitle && m.altTitle !== m.title ? m.altTitle : '';
+    $('detailSynopsis').textContent = m.synopsis || '';
+    $('detailAuthors').textContent = m.authors.length ? 'By ' + m.authors.join(', ') : '';
+
+    const badges = [
+      m.type   && `<span class="badge type">${m.type}</span>`,
+      m.status && `<span class="badge status">${m.status}</span>`,
+      m.rating && `<span class="badge">★ ${Number(m.rating).toFixed(1)}</span>`,
+      ...m.genres.map(g => `<span class="badge">${g}</span>`),
+    ].filter(Boolean).join('');
+    $('detailBadges').innerHTML = badges;
+
+    $('chapterHeading').textContent = `Chapters (${m.chapters.length})`;
+
+    m.chapters.forEach((ch, idx) => {
+      const li = document.createElement('li');
+      const chTitle = ch.title && ch.title !== `Chapter ${ch.number}` ? ch.title : '';
+      li.innerHTML = `<a href="#" data-idx="${idx}">
+        <span class="ch-num">Ch. ${ch.number}</span>
+        <span class="ch-title">${chTitle}</span>
+        <span class="ch-date">${formatDate(ch.createdAt)}</span>
+      </a>`;
+      li.querySelector('a').addEventListener('click', e => {
+        e.preventDefault();
+        openReader(mangaId, ch.id, idx);
+      });
+      $('chapterList').appendChild(li);
+    });
+  } catch (e) {
+    $('detailContent').innerHTML = `<p style="color:#f66;padding:16px">Error: ${e.message}</p>`;
+  } finally {
+    showSpinner(false);
+  }
+}
+
+/* ── Reader ─────────────────────────────────────────── */
+async function openReader(mangaId, chapterId, chapterIndex) {
+  setView('reader');
+  showSpinner(true);
+  readerPages.innerHTML = '';
+
+  state.reader.mangaId    = mangaId;
+  state.reader.chapterId  = chapterId;
+  state.reader.index      = chapterIndex;
+  state.reader.page       = 0;
+  state.reader.images     = [];
+
+  const ch = state.chapters[chapterIndex];
+  $('readerTitle').textContent = `${state.manga?.title || ''} · Ch. ${ch?.number}`;
+
+  // Prev / Next chapter buttons
+  $('prevChapBtn').disabled = chapterIndex >= state.chapters.length - 1;
+  $('nextChapBtn').disabled = chapterIndex <= 0;
+  $('readerProgress').textContent = `${chapterIndex + 1} / ${state.chapters.length}`;
+
+  applyReaderMode();
+
+  try {
+    const data = await api(`/api/chapter/${mangaId}/${chapterId}`);
+    state.reader.images = data.images;
+
+    data.images.forEach((url, i) => {
+      const img = document.createElement('img');
+      img.dataset.index = i;
+      img.loading = 'lazy';
+      img.alt = `Page ${i + 1}`;
+      img.src = proxyImg(url);
+      img.onerror = () => { img.style.opacity = '.3'; };
+      readerPages.appendChild(img);
+    });
+
+    if (state.reader.mode === 'page') {
+      goToPage(0);
+    }
+  } catch (e) {
+    readerPages.innerHTML = `<p style="color:#f66;padding:24px">Error: ${e.message}</p>`;
+  } finally {
+    showSpinner(false);
+    window.scrollTo(0, 0);
+  }
+}
+
+function applyReaderMode() {
+  const isPage = state.reader.mode === 'page';
+  readerPages.classList.toggle('page-mode', isPage);
+  readerNav.classList.toggle('hidden', !isPage);
+  $('modeBtn').title = isPage ? 'Switch to Scroll' : 'Switch to Page';
+  $('modeBtn').textContent = isPage ? '☰' : '⇕';
+}
+
+function goToPage(n) {
+  const imgs = readerPages.querySelectorAll('img');
+  if (!imgs.length) return;
+  n = Math.max(0, Math.min(n, imgs.length - 1));
+  state.reader.page = n;
+  imgs.forEach((img, i) => img.classList.toggle('hidden', i !== n));
+  pageCounter.textContent = `${n + 1} / ${imgs.length}`;
+  $('prevPageBtn').disabled = n === 0;
+  $('nextPageBtn').disabled = n === imgs.length - 1;
+  window.scrollTo(0, 0);
+}
+
+/* ── Event listeners ────────────────────────────────── */
+
+// Filters
+genreSelect.addEventListener('change', () => { state.browse.genreId = genreSelect.value; loadBrowse(true); });
+tagSelect.addEventListener('change',   () => { state.browse.tagId   = tagSelect.value;   loadBrowse(true); });
+sortSelect.addEventListener('change',  () => { state.browse.sort    = sortSelect.value;  loadBrowse(true); });
+
+typeFilter.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    typeFilter.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    state.browse.type = chip.dataset.type;
+    loadBrowse(true);
+  });
+});
+
+// Search
+$('searchForm').addEventListener('submit', e => {
+  e.preventDefault();
+  state.browse.q = searchInput.value.trim();
+  loadBrowse(true);
+});
+searchInput.addEventListener('input', () => {
+  if (!searchInput.value.trim()) { state.browse.q = ''; loadBrowse(true); }
+});
+
+// Pagination
+$('prevPage').addEventListener('click', () => { state.browse.page--; loadBrowse(); });
+$('nextPage').addEventListener('click', () => { state.browse.page++; loadBrowse(); });
+
+// Back button
+backBtn.addEventListener('click', () => {
+  const v = document.body.dataset.view;
+  if (v === 'reader') setView('detail');
+  else                setView('browse');
+});
+
+// Reader prev/next chapter
+$('prevChapBtn').addEventListener('click', () => {
+  const idx = state.reader.index + 1;  // chapters sorted desc, so +1 = older
+  if (idx < state.chapters.length) {
+    const ch = state.chapters[idx];
+    openReader(state.reader.mangaId, ch.id, idx);
+  }
+});
+$('nextChapBtn').addEventListener('click', () => {
+  const idx = state.reader.index - 1;  // -1 = newer
+  if (idx >= 0) {
+    const ch = state.chapters[idx];
+    openReader(state.reader.mangaId, ch.id, idx);
+  }
+});
+
+// Reader back
+$('readerBack').addEventListener('click', () => setView('detail'));
+
+// Mode toggle
+$('modeBtn').addEventListener('click', () => {
+  state.reader.mode = state.reader.mode === 'scroll' ? 'page' : 'scroll';
+  localStorage.setItem('readerMode', state.reader.mode);
+  applyReaderMode();
+  if (state.reader.mode === 'page') goToPage(0);
+  else readerPages.querySelectorAll('img').forEach(i => i.classList.remove('hidden'));
+});
+
+// Page nav
+$('prevPageBtn').addEventListener('click', () => goToPage(state.reader.page - 1));
+$('nextPageBtn').addEventListener('click', () => goToPage(state.reader.page + 1));
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  if (document.body.dataset.view !== 'reader') return;
+  if (state.reader.mode === 'page') {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const dir = e.key === 'ArrowRight' ? 1 : -1;
+      goToPage(state.reader.page + dir);
+    }
+  }
+  if (e.key === 'Escape') setView('detail');
+});
+
+/* ── Bootstrap ──────────────────────────────────────── */
+init();
