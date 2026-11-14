@@ -141,12 +141,23 @@ const bookmarkletFn = async () => {
     let t;
     try { t = await navigator.clipboard.readText(); } catch (e) { t = prompt('Paste the export JSON'); }
     const d = JSON.parse(t);
-    const post = async (path, body) => (await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) })).status;
-    let bs = [];
+    const post = async (path, body) => {
+      const r = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
+      return { s: r.status, t: (await r.text()).slice(0, 120) };
+    };
+    const bs = [], ps = [];
     for (let i = 0; i < d.bookmarks.length; i += 10) bs.push(await post('/api/user/syncBookmarks', d.bookmarks.slice(i, i + 10)));
-    let ps = [];
     for (let i = 0; i < d.progress.length; i += 50) ps.push(await post('/api/read/syncProgress', { progress: d.progress.slice(i, i + 50), deletedChapters: [] }));
-    alert('Bookmarks: ' + d.bookmarks.length + ' [' + bs.join(',') + '] | Progress: ' + d.progress.length + ' [' + ps.join(',') + ']');
+    let info = '';
+    try {
+      const id = d.progress[0].mangaId;
+      const j = await (await fetch('/api/manga/page?id=' + id, { credentials: 'include' })).json();
+      const mp = j.mangaPage || j;
+      const hit = Object.keys(mp).filter(k => /read|progress|continue|bookmark/i.test(k));
+      info = '\nPAGE KEYS: ' + hit.map(k => k + '=' + JSON.stringify(mp[k]).slice(0, 160)).join(' ; ');
+    } catch (e) { info = '\nPAGE CHECK FAILED: ' + e.message; }
+    alert('Bookmarks: ' + d.bookmarks.length + ' [' + bs.map(x => x.s).join(',') + '] ' + (bs[0] ? bs[0].t : '') +
+      '\nProgress: ' + d.progress.length + ' [' + ps.map(x => x.s).join(',') + '] ' + (ps[0] ? ps[0].t : '') + info);
   } catch (e) { alert('Sync error: ' + e.message); }
 };
 const BOOKMARKLET = 'javascript:(' + bookmarkletFn.toString().replace(/\s+/g, ' ') + ')()';
