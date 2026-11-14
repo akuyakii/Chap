@@ -209,3 +209,10 @@ h1,h2,h3 { margin: 0; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .resume-btn:disabled { opacity: .45; cursor: default; }
+
+.resume-btn.sync { margin-top: 6px; background: var(--bg3); border-color: var(--border); color: var(--fg); }
+#syncDlg { max-width: 460px; width: 92vw; background: var(--bg2); color: var(--fg); border: 1px solid var(--border); border-radius: 12px; }
+#syncDlg::backdrop { background: rgba(0,0,0,.6); }
+#syncDlg li { margin-bottom: 12px; line-height: 1.5; }
+#syncDlg button { padding: 6px 12px; border-radius: 6px; background: var(--accent2); color: #fff; border: 1px solid var(--accent2); }
+#syncDlg a { color: var(--accent); }

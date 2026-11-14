@@ -159,7 +159,7 @@ app.get('/api/manga/:id', async (req, res) => {
       tags:     (m.tags    || []).map(t => t.name || t),
       authors:  (m.authors || []).map(a => a.name || a),
       chapters: rawChapters
-        .map(c => ({ id: c.id, title: c.title, number: Number(c.number), createdAt: c.createdAt }))
+        .map(c => ({ id: c.id, title: c.title, number: Number(c.number), createdAt: c.createdAt, scanId: c.scanlationMangaId }))
         .sort((a, b) => b.number - a.number),
     });
   } catch (e) {

@@ -22,6 +22,7 @@
   <aside id="sidebar">
     <section>
       <button id="resumeBtn" class="resume-btn">▶ Continue</button>
+      <button id="syncBtn" class="resume-btn sync">⇄ Sync to my account</button>
       <div class="chip-group">
         <button id="histBtn" class="chip">🕘 History</button>
         <button id="favBtn" class="chip">★ Favorites</button>
@@ -100,6 +101,19 @@
     <button id="nextPageBtn">›</button>
   </div>
 </div>
+
+<dialog id="syncDlg">
+  <h3>Sync to your atsu.moe account</h3>
+  <p class="muted">Your login never touches this app. A bookmark runs inside atsu.moe (where you are already logged in) and sends the data.</p>
+  <ol>
+    <li><button id="copyExport">Copy my data</button> <span id="exportInfo" class="muted"></span></li>
+    <li><button id="copyBm">Copy bookmarklet</button><br>
+      <span class="muted">One-time: bookmark any page in your browser, name it <b>Sync Chap</b>, edit its URL and paste the copied text.</span></li>
+    <li>Open <a href="https://atsu.moe" target="_blank" rel="noopener">atsu.moe</a> (logged in), then open the <b>Sync Chap</b> bookmark.
+      <span class="muted">On Android Chrome: type <i>Sync Chap</i> in the address bar and pick the bookmark.</span></li>
+  </ol>
+  <button id="closeSync">Close</button>
+</dialog>
 
 <!-- Spinner -->
 <div id="spinner" class="spinner hidden"></div>

@@ -57,7 +57,7 @@ function markRead(mangaId, chapterId) {
 const getFavs = () => store.get('favs', {});
 function toggleFav(m) {
   const f = getFavs();
-  if (f[m.id]) delete f[m.id]; else f[m.id] = { id: m.id, title: m.title, poster: m.poster };
+  if (f[m.id]) delete f[m.id]; else f[m.id] = { id: m.id, title: m.title, poster: m.poster, type: m.type };
   store.set('favs', f);
   return !!f[m.id];
 }
@@ -65,7 +65,7 @@ function toggleFav(m) {
 const getHist = () => store.get('history', {});
 function saveHist(m, ch) {
   const h = getHist();
-  h[m.id] = { id: m.id, title: m.title, poster: m.poster, chapterId: ch.id, number: ch.number, ts: Date.now() };
+  h[m.id] = { id: m.id, title: m.title, poster: m.poster, type: m.type, chapterId: ch.id, number: ch.number, ts: Date.now() };
   store.set('history', h);
   paintResume();
 }
@@ -101,6 +101,39 @@ function nextChapter() {
   return true;
 }
 function paintAuto() { $('autoBtn').textContent = state.reader.auto ? 'Auto ✓' : 'Auto ✗'; }
+
+const getProg = () => store.get('prog', {});
+function recordProg(mangaId, ch, pages) {
+  if (!ch || !ch.scanId || !pages) return;
+  const p = getProg();
+  p[ch.id] = { mangaId, chapterId: ch.id, scanId: ch.scanId, pages, ts: Date.now() };
+  store.set('prog', p);
+}
+function buildExport() {
+  const hist = getHist(), favs = getFavs(), bm = [];
+  Object.values(hist).forEach(h => bm.push({ mangaId: h.id, status: 'Reading', synced: false, ts: h.ts, type: h.type || 'Manga' }));
+  Object.values(favs).forEach(f => { if (!hist[f.id]) bm.push({ mangaId: f.id, status: 'PlanToRead', synced: false, ts: Date.now(), type: f.type || 'Manga' }); });
+  const progress = Object.values(getProg()).map(p => ({
+    mangaScanlationId: p.scanId, mangaId: p.mangaId, chapterId: p.chapterId,
+    page: Math.max(0, p.pages - 1), frac: 1, pages: p.pages, ts: p.ts, strip: false,
+  }));
+  return { bookmarks: bm, progress };
+}
+// Runs INSIDE atsu.moe (your logged-in tab). Cookies never leave the browser.
+const bookmarkletFn = async () => {
+  try {
+    let t;
+    try { t = await navigator.clipboard.readText(); } catch (e) { t = prompt('Paste the export JSON'); }
+    const d = JSON.parse(t);
+    const post = async (path, body) => (await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) })).status;
+    let bs = [];
+    for (let i = 0; i < d.bookmarks.length; i += 10) bs.push(await post('/api/user/syncBookmarks', d.bookmarks.slice(i, i + 10)));
+    let ps = [];
+    for (let i = 0; i < d.progress.length; i += 50) ps.push(await post('/api/read/syncProgress', { progress: d.progress.slice(i, i + 50), deletedChapters: [] }));
+    alert('Bookmarks: ' + d.bookmarks.length + ' [' + bs.join(',') + '] | Progress: ' + d.progress.length + ' [' + ps.join(',') + ']');
+  } catch (e) { alert('Sync error: ' + e.message); }
+};
+const BOOKMARKLET = 'javascript:(' + bookmarkletFn.toString().replace(/\s+/g, ' ') + ')()';
 
 function showSpinner(v) { spinner.classList.toggle('hidden', !v); }
 
@@ -316,6 +349,7 @@ async function openReader(mangaId, chapterId, chapterIndex) {
   try {
     const data = await api(`/api/chapter/${mangaId}/${chapterId}`);
     state.reader.images = data.images;
+    recordProg(mangaId, ch, data.images.length);
 
     data.images.forEach((url, i) => {
       const img = document.createElement('img');
@@ -477,3 +511,16 @@ new IntersectionObserver(entries => {
   if (!r.images.length || r.loaded < r.images.length || window.scrollY < 50) return;
   nextChapter();
 }, { rootMargin: '0px 0px 200px 0px' }).observe($('readerEnd'));
+
+$('syncBtn').addEventListener('click', () => {
+  const e = buildExport();
+  $('exportInfo').textContent = `${e.bookmarks.length} manga · ${e.progress.length} chapters`;
+  $('syncDlg').showModal();
+});
+const copy = async (txt, btn) => {
+  try { await navigator.clipboard.writeText(txt); const o = btn.textContent; btn.textContent = 'Copied ✓'; setTimeout(() => btn.textContent = o, 1500); }
+  catch { prompt('Copy this:', txt); }
+};
+$('copyExport').addEventListener('click', e => copy(JSON.stringify(buildExport()), e.target));
+$('copyBm').addEventListener('click', e => copy(BOOKMARKLET, e.target));
+$('closeSync').addEventListener('click', () => $('syncDlg').close());
