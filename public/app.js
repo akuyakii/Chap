@@ -113,10 +113,26 @@ function buildExport() {
   const hist = getHist(), favs = getFavs(), bm = [];
   Object.values(hist).forEach(h => bm.push({ mangaId: h.id, status: 'Reading', synced: false, ts: h.ts, type: h.type || 'Manga' }));
   Object.values(favs).forEach(f => { if (!hist[f.id]) bm.push({ mangaId: f.id, status: 'PlanToRead', synced: false, ts: Date.now(), type: f.type || 'Manga' }); });
-  const progress = Object.values(getProg()).map(p => ({
+  const real = getProg(), out = {};
+  let t = Date.now();
+  Object.keys(hist).forEach(id => {
+    const chaps = store.get('chaps:' + id, []);
+    const done = readSet(id);
+    const reached = chaps.filter(c => done.has(c.id)).map(c => c.number);
+    if (!reached.length) return;
+    const max = Math.max(...reached);
+    // every chapter from the first up to the furthest one reached counts as read
+    chaps.filter(c => c.number <= max && c.scanId).sort((x, y) => x.number - y.number).forEach(c => {
+      const pages = (real[c.id] && real[c.id].pages) || c.pageCount || 1;
+      out[c.id] = { mangaScanlationId: c.scanId, mangaId: id, chapterId: c.id,
+        page: Math.max(0, pages - 1), frac: 1, pages, ts: t++, strip: false };
+    });
+  });
+  // chapters read from other manga not in history (safety net)
+  Object.values(real).forEach(p => { if (!out[p.chapterId]) out[p.chapterId] = {
     mangaScanlationId: p.scanId, mangaId: p.mangaId, chapterId: p.chapterId,
-    page: Math.max(0, p.pages - 1), frac: 1, pages: p.pages, ts: p.ts, strip: false,
-  }));
+    page: Math.max(0, p.pages - 1), frac: 1, pages: p.pages, ts: p.ts, strip: false }; });
+  const progress = Object.values(out);
   return { bookmarks: bm, progress };
 }
 // Runs INSIDE atsu.moe (your logged-in tab). Cookies never leave the browser.
@@ -328,6 +344,7 @@ async function openReader(mangaId, chapterId, chapterIndex) {
   readerPages.innerHTML = '';
 
   state.reader.busy = true; state.reader.loaded = 0;
+  store.set('chaps:' + mangaId, state.chapters.map(c => ({ id: c.id, number: c.number, scanId: c.scanId, pageCount: c.pageCount || 0 })));
   markRead(mangaId, chapterId);
   if (state.manga && state.chapters[chapterIndex]) saveHist(state.manga, state.chapters[chapterIndex]);
   state.reader.mangaId    = mangaId;
